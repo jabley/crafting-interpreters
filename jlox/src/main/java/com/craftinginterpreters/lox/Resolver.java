@@ -8,12 +8,22 @@ import java.util.Stack;
 class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     private final Interpreter interpreter;
 
-    private final Stack<Map<String, Boolean>> scopes = new Stack<>();
+    private final Stack<Map<String, Variable>> scopes = new Stack<>();
 
     private FunctionType currentFunction = FunctionType.NONE;
 
     Resolver(Interpreter interpreter) {
         this.interpreter = interpreter;
+    }
+
+    private class Variable {
+        boolean isDefined = false;
+
+        final int slot;
+
+        private Variable(int slot) {
+            this.slot = slot;
+        }
     }
 
     private enum FunctionType {
@@ -148,7 +158,8 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     @Override
     public Void visitVariableExpr(Expr.Variable expr) {
         if (!scopes.isEmpty() &&
-                scopes.peek().get(expr.name.lexeme) == Boolean.FALSE) {
+                scopes.peek().containsKey(expr.name.lexeme)
+                && !scopes.peek().get(expr.name.lexeme).isDefined) {
             Lox.error(expr.name,
                     "Can't read local variable in its own initializer.");
         }
@@ -179,7 +190,7 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
 
     private void beginScope() {
-        scopes.push(new HashMap<String, Boolean>());
+        scopes.push(new HashMap<String, Variable>());
     }
 
     private void endScope() {
@@ -191,26 +202,28 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
             return;
         }
 
-        Map<String, Boolean> scope = scopes.peek();
+        Map<String, Variable> scope = scopes.peek();
         if (scope.containsKey(name.lexeme)) {
             Lox.error(name,
                     "Already a variable with this name in this scope.");
         }
 
-        scope.put(name.lexeme, false);
+        scope.put(name.lexeme, new Variable(scope.size()));
     }
 
     private void define(Token name) {
         if (scopes.isEmpty()) {
             return;
         }
-        scopes.peek().put(name.lexeme, true);
+        scopes.peek().get(name.lexeme).isDefined = true;
     }
 
     private void resolveLocal(Expr expr, Token name) {
         for (int i = scopes.size() - 1; i >= 0; i--) {
-            if (scopes.get(i).containsKey(name.lexeme)) {
-                interpreter.resolve(expr, scopes.size() - 1 - i);
+            Map<String, Variable> scope = scopes.get(i);
+            if (scope.containsKey(name.lexeme)) {
+                interpreter.resolve(expr, scopes.size() - 1 - i,
+                        scope.get(name.lexeme).slot);
                 return;
             }
         }
