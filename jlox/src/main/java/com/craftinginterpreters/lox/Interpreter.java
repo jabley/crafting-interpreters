@@ -7,13 +7,12 @@ import java.util.Map;
 
 class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 
-    final Map<String, Object> globals = new HashMap<>();
-    private Environment environment;
+    final Environment globals = new Environment();
+    private Environment environment = globals;
     private final Map<Expr, Integer> locals = new HashMap<>();
-    private final Map<Expr, Integer> slots = new HashMap<>();
 
     Interpreter() {
-        globals.put("clock", new LoxCallable() {
+        globals.define("clock", new LoxCallable() {
             @Override
             public int arity() {
                 return 0;
@@ -93,14 +92,9 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     private Object lookUpVariable(Token name, Expr expr) {
         Integer distance = locals.get(expr);
         if (distance != null) {
-            return environment.getAt(distance, slots.get(expr));
+            return environment.getAt(distance, name.lexeme);
         } else {
-            if (globals.containsKey(name.lexeme)) {
-                return globals.get(name.lexeme);
-            } else {
-                throw new RuntimeError(name,
-                        "Undefined variable '" + name.lexeme + "'.");
-            }
+            return globals.get(name);
         }
     }
 
@@ -165,9 +159,8 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
         stmt.accept(this);
     }
 
-    void resolve(Expr expr, int depth, int slot) {
+    void resolve(Expr expr, int depth) {
         locals.put(expr, depth);
-        slots.put(expr, slot);
     }
 
     void executeBlock(List<Stmt> statements,
@@ -199,7 +192,7 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     @Override
     public Void visitFunctionStmt(Stmt.Function stmt) {
         LoxFunction function = new LoxFunction(stmt, this.environment);
-        define(stmt.name, function);
+        environment.define(stmt.name.lexeme, function);
         return null;
     }
 
@@ -237,7 +230,7 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
             value = evaluate(stmt.initializer);
         }
 
-        define(stmt.name, value);
+        environment.define(stmt.name.lexeme, value);
         return null;
     }
 
@@ -255,13 +248,9 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 
         Integer distance = locals.get(expr);
         if (distance != null) {
-            environment.assignAt(distance, slots.get(expr), value);
+            environment.assignAt(distance, expr.name, value);
         } else {
-            if (globals.containsKey(expr.name.lexeme)) {
-                globals.put(expr.name.lexeme, value);
-            } else {
-                throw new RuntimeError(expr.name, "Undefined variable '" + expr.name.lexeme + "'.");
-            }
+            globals.assign(expr.name, value);
         }
 
         return value;
@@ -339,13 +328,4 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 
         return function.call(this, arguments);
     }
-
-    private void define(Token name, Object value) {
-        if (environment != null) {
-            environment.define(value);
-        } else {
-            globals.put(name.lexeme, value);
-        }
-    }
-
 }
