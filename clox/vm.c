@@ -157,6 +157,20 @@ static InterpretResult run()
             pop();
             break;
         }
+        case OP_SET_GLOBAL:
+        {
+            ObjString *name = READ_STRING();
+
+            // If the variable hasn't been defined...
+            if (tableSet(&vm.globals, name, peek(0)))
+            {
+                // runtime error to try to assign to an undefined variable
+                tableDelete(&vm.globals, name);
+                runtimeError("Undefined variable '%s'.", name->chars);
+                return INTERPRET_RUNTIME_ERROR;
+            }
+            break;
+        }
         case OP_EQUAL:
         {
             Value b = pop();
