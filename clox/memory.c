@@ -1,5 +1,6 @@
 #include <stdlib.h>
 
+#include "compiler.h"
 #include "memory.h"
 #include "vm.h"
 
@@ -115,6 +116,7 @@ static void markRoots()
     }
 
     markTable(&vm.globals);
+    markCompilerRoots();
 }
 
 void collectGarbage()
