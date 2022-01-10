@@ -47,6 +47,22 @@ void markObject(Obj *object)
 #endif
 
     object->isMarked = true;
+
+    if (vm.grayCapacity < vm.grayCount + 1)
+    {
+        vm.grayCapacity = GROW_CAPACITY(vm.grayCapacity);
+
+        // We use the system realloc. The memory for this is not managed by our garbage collector. We don't want
+        // growing the gray stack during a GC to recursively start a new GC.
+        vm.grayStack = (Obj **)realloc(vm.grayStack, sizeof(Obj *) * vm.grayCapacity);
+
+        if (vm.grayStack == NULL)
+        {
+            exit(1);
+        }
+    }
+
+    vm.grayStack[vm.grayCount++] = object;
 }
 
 void markValue(Value value)
@@ -141,4 +157,6 @@ void freeObjects()
         freeObject(object);
         object = next;
     }
+
+    free(vm.grayStack);
 }
